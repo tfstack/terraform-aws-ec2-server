@@ -1,0 +1,98 @@
+#!/bin/bash
+set -e
+
+# Update system
+yum update -y
+
+# Install webserver based on type
+if [ "${webserver_type}" = "nginx" ]; then
+    # Install nginx using amazon-linux-extras
+    amazon-linux-extras install nginx1 -y
+
+                            # Configure nginx to listen on the specified port
+    # Create a backup of the original config
+    cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.backup
+
+    # Replace both IPv4 and IPv6 listen directives
+    sed -i "s/listen.*80;/listen ${http_port};/" /etc/nginx/nginx.conf
+    sed -i "s/listen.*\[::\]:80;/listen [::]:${http_port};/" /etc/nginx/nginx.conf
+
+    # Test nginx configuration
+    nginx -t || {
+        echo "Nginx configuration test failed, restoring backup"
+        cp /etc/nginx/nginx.conf.backup /etc/nginx/nginx.conf
+        # Test again with backup
+        nginx -t
+    }
+
+    systemctl enable nginx
+    systemctl start nginx
+
+    # Create index.html
+    cat > /usr/share/nginx/html/index.html << 'EOF'
+<!DOCTYPE html>
+<html>
+<head>
+    <title>EC2 Server</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .container { max-width: 600px; margin: 0 auto; }
+        h1 { color: #333; }
+        .info { background: #f5f5f5; padding: 20px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 EC2 Server Running</h1>
+        <div class="info">
+            <p><strong>Server:</strong> Amazon Linux 2</p>
+            <p><strong>Webserver:</strong> Nginx</p>
+            <p><strong>Port:</strong> ${http_port}</p>
+            <p><strong>Status:</strong> ✅ Running</p>
+        </div>
+    </div>
+</body>
+</html>
+EOF
+
+elif [ "${webserver_type}" = "apache" ]; then
+    # Install Apache
+    yum install -y httpd
+
+    # Configure Apache to listen on the specified port
+    # Replace the default Listen directive in httpd.conf
+    sed -i "s/^Listen 80/Listen ${http_port}/" /etc/httpd/conf/httpd.conf
+
+    # Also update the VirtualHost directive if it exists
+    sed -i "s/:80>/:${http_port}>/g" /etc/httpd/conf/httpd.conf
+
+    systemctl enable httpd
+    systemctl start httpd
+
+    # Create index.html
+    cat > /var/www/html/index.html << 'EOF'
+<!DOCTYPE html>
+<html>
+<head>
+    <title>EC2 Server</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .container { max-width: 600px; margin: 0 auto; }
+        h1 { color: #333; }
+        .info { background: #f5f5f5; padding: 20px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 EC2 Server Running</h1>
+        <div class="info">
+            <p><strong>Server:</strong> Amazon Linux 2</p>
+            <p><strong>Webserver:</strong> Apache</p>
+            <p><strong>Port:</strong> ${http_port}</p>
+            <p><strong>Status:</strong> ✅ Running</p>
+        </div>
+    </div>
+</body>
+</html>
+EOF
+fi
