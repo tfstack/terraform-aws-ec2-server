@@ -113,3 +113,52 @@ resource "aws_instance" "server" {
     aws_iam_role_policy_attachment.cloudwatch
   ]
 }
+
+# EBS Volume for single volume configuration
+resource "aws_ebs_volume" "single" {
+  count = var.ebs_volume_size != null ? 1 : 0
+
+  availability_zone = aws_instance.server.availability_zone
+  size              = var.ebs_volume_size
+  type              = var.ebs_volume_type
+  encrypted         = true
+
+  tags = merge(var.instance_tags, {
+    Name = "${var.name}-ebs-volume"
+  })
+}
+
+# EBS Volume attachment for single volume
+resource "aws_volume_attachment" "single" {
+  count = var.ebs_volume_size != null ? 1 : 0
+
+  device_name = var.ebs_device_name
+  volume_id   = aws_ebs_volume.single[0].id
+  instance_id = aws_instance.server.id
+}
+
+# EBS Volumes for multiple volumes configuration
+resource "aws_ebs_volume" "multiple" {
+  for_each = { for vol in var.ebs_volumes : vol.device_name => vol }
+
+  availability_zone = aws_instance.server.availability_zone
+  size              = each.value.volume_size
+  type              = each.value.volume_type
+  encrypted         = each.value.encrypted
+  kms_key_id        = each.value.kms_key_id
+  iops              = each.value.iops
+  throughput        = each.value.throughput
+
+  tags = merge(var.instance_tags, each.value.tags, {
+    Name = "${var.name}-ebs-volume-${replace(each.value.device_name, "/", "-")}"
+  })
+}
+
+# EBS Volume attachments for multiple volumes
+resource "aws_volume_attachment" "multiple" {
+  for_each = { for vol in var.ebs_volumes : vol.device_name => vol }
+
+  device_name = each.value.device_name
+  volume_id   = aws_ebs_volume.multiple[each.key].id
+  instance_id = aws_instance.server.id
+}

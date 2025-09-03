@@ -22,3 +22,19 @@ output "ssm_instance_url" {
   description = "SSM Console Session URL (if SSM enabled)"
   value       = var.enable_ssm ? "https://console.aws.amazon.com/systems-manager/session-manager/${aws_instance.server.id}" : null
 }
+
+output "ebs_volume_ids" {
+  description = "List of EBS volume IDs attached to the instance"
+  value = concat(
+    var.ebs_volume_size != null ? [aws_ebs_volume.single[0].id] : [],
+    [for vol in aws_ebs_volume.multiple : vol.id]
+  )
+}
+
+output "ebs_volume_attachments" {
+  description = "Map of device names to volume IDs for attached EBS volumes"
+  value = merge(
+    var.ebs_volume_size != null ? { (var.ebs_device_name) = aws_ebs_volume.single[0].id } : {},
+    { for k, vol in aws_ebs_volume.multiple : k => vol.id }
+  )
+}

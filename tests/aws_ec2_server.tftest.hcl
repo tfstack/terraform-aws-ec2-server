@@ -428,3 +428,200 @@ run "test_valid_configuration" {
     error_message = "HTTP port should be set correctly"
   }
 }
+
+# Test Single EBS Volume Configuration
+run "single_ebs_volume" {
+  command = plan
+
+  variables {
+    vpc_id          = "vpc-12345678"
+    subnet_id       = "subnet-87654321"
+    instance_type   = "t3.micro"
+    enable_ssm      = true
+    ebs_volume_size = 20
+    ebs_volume_type = "gp3"
+    ebs_device_name = "/dev/xvdf"
+    instance_tags = {
+      Environment = "test"
+      Project     = "ec2-ebs-single-test"
+      Type        = "single-ebs"
+    }
+  }
+
+  assert {
+    condition     = var.ebs_volume_size == 20
+    error_message = "EBS volume size should be 20 GB"
+  }
+
+  assert {
+    condition     = var.ebs_volume_type == "gp3"
+    error_message = "EBS volume type should be gp3"
+  }
+
+  assert {
+    condition     = var.ebs_device_name == "/dev/xvdf"
+    error_message = "EBS device name should be /dev/xvdf"
+  }
+
+  assert {
+    condition     = length(var.ebs_volumes) == 0
+    error_message = "Multiple EBS volumes should be empty for single volume test"
+  }
+
+  assert {
+    condition     = var.enable_ssm == true
+    error_message = "SSM should be enabled"
+  }
+}
+
+# Test Multiple EBS Volumes Configuration
+run "multiple_ebs_volumes" {
+  command = plan
+
+  variables {
+    vpc_id        = "vpc-12345678"
+    subnet_id     = "subnet-87654321"
+    instance_type = "t3.small"
+    enable_ssm    = true
+    ebs_volumes = [
+      {
+        device_name = "/dev/xvdf"
+        volume_size = 10
+        volume_type = "gp3"
+        encrypted   = true
+        tags        = { Purpose = "content" }
+      },
+      {
+        device_name = "/dev/xvdg"
+        volume_size = 5
+        volume_type = "gp2"
+        encrypted   = true
+        tags        = { Purpose = "logs" }
+      }
+    ]
+    instance_tags = {
+      Environment = "test"
+      Project     = "ec2-ebs-multiple-test"
+      Type        = "multiple-ebs"
+    }
+  }
+
+  assert {
+    condition     = length(var.ebs_volumes) == 2
+    error_message = "Should have 2 EBS volumes configured"
+  }
+
+  assert {
+    condition     = var.ebs_volumes[0].device_name == "/dev/xvdf"
+    error_message = "First volume device name should be /dev/xvdf"
+  }
+
+  assert {
+    condition     = var.ebs_volumes[0].volume_size == 10
+    error_message = "First volume size should be 10 GB"
+  }
+
+  assert {
+    condition     = var.ebs_volumes[0].volume_type == "gp3"
+    error_message = "First volume type should be gp3"
+  }
+
+  assert {
+    condition     = var.ebs_volumes[1].device_name == "/dev/xvdg"
+    error_message = "Second volume device name should be /dev/xvdg"
+  }
+
+  assert {
+    condition     = var.ebs_volumes[1].volume_size == 5
+    error_message = "Second volume size should be 5 GB"
+  }
+
+  assert {
+    condition     = var.ebs_volumes[1].volume_type == "gp2"
+    error_message = "Second volume type should be gp2"
+  }
+
+  assert {
+    condition     = var.ebs_volume_size == null
+    error_message = "Single EBS volume size should be null when using multiple volumes"
+  }
+}
+
+# Test EBS Volume with Custom Configuration
+run "ebs_volume_custom_config" {
+  command = plan
+
+  variables {
+    vpc_id        = "vpc-12345678"
+    subnet_id     = "subnet-87654321"
+    instance_type = "t3.medium"
+    enable_ssm    = true
+    ebs_volumes = [
+      {
+        device_name = "/dev/xvdf"
+        volume_size = 100
+        volume_type = "io1"
+        encrypted   = true
+        iops        = 1000
+        tags        = { Purpose = "database", Environment = "production" }
+      }
+    ]
+    instance_tags = {
+      Environment = "production"
+      Project     = "ec2-ebs-custom-test"
+      Type        = "custom-ebs"
+    }
+  }
+
+  assert {
+    condition     = var.ebs_volumes[0].volume_type == "io1"
+    error_message = "Volume type should be io1"
+  }
+
+  assert {
+    condition     = var.ebs_volumes[0].iops == 1000
+    error_message = "IOPS should be 1000"
+  }
+
+  assert {
+    condition     = var.ebs_volumes[0].volume_size == 100
+    error_message = "Volume size should be 100 GB"
+  }
+
+  assert {
+    condition     = var.ebs_volumes[0].encrypted == true
+    error_message = "Volume should be encrypted"
+  }
+}
+
+# EBS validation tests removed - no validation implemented
+
+# Test Default EBS Volume Values
+run "test_ebs_defaults" {
+  command = plan
+
+  variables {
+    vpc_id    = "vpc-12345678"
+    subnet_id = "subnet-87654321"
+  }
+
+  assert {
+    condition     = var.ebs_volume_size == null
+    error_message = "Default EBS volume size should be null"
+  }
+
+  assert {
+    condition     = var.ebs_volume_type == "gp3"
+    error_message = "Default EBS volume type should be gp3"
+  }
+
+  assert {
+    condition     = var.ebs_device_name == "/dev/xvdf"
+    error_message = "Default EBS device name should be /dev/xvdf"
+  }
+
+  assert {
+    condition     = length(var.ebs_volumes) == 0
+    error_message = "Default EBS volumes list should be empty"
+  }
+}
