@@ -113,3 +113,68 @@ variable "instance_tags" {
   type        = map(string)
   default     = {}
 }
+
+# EBS Volume Configuration
+variable "ebs_volume_size" {
+  description = "Size of the EBS volume in GB (for single volume configuration)"
+  type        = number
+  default     = null
+}
+
+variable "ebs_volume_type" {
+  description = "Type of EBS volume (for single volume configuration)"
+  type        = string
+  default     = "gp3"
+
+  validation {
+    condition     = contains(["gp2", "gp3", "io1", "io2", "sc1", "st1"], var.ebs_volume_type)
+    error_message = "EBS volume type must be one of: gp2, gp3, io1, io2, sc1, st1."
+  }
+}
+
+variable "ebs_device_name" {
+  description = "Device name for the EBS volume (for single volume configuration)"
+  type        = string
+  default     = "/dev/xvdf"
+
+  validation {
+    condition     = can(regex("^/dev/[a-z]+$", var.ebs_device_name))
+    error_message = "EBS device name must be a valid device path (e.g., /dev/xvdf)."
+  }
+}
+
+variable "ebs_volumes" {
+  description = "List of EBS volumes to attach to the instance"
+  type = list(object({
+    device_name = string
+    volume_size = number
+    volume_type = string
+    encrypted   = optional(bool, true)
+    kms_key_id  = optional(string, null)
+    iops        = optional(number, null)
+    throughput  = optional(number, null)
+    tags        = optional(map(string), {})
+  }))
+  default = []
+
+  validation {
+    condition = alltrue([
+      for vol in var.ebs_volumes : can(regex("^/dev/[a-z]+$", vol.device_name))
+    ])
+    error_message = "All EBS device names must be valid device paths (e.g., /dev/xvdf)."
+  }
+
+  validation {
+    condition = alltrue([
+      for vol in var.ebs_volumes : vol.volume_size >= 1 && vol.volume_size <= 16384
+    ])
+    error_message = "All EBS volume sizes must be between 1 and 16384 GB."
+  }
+
+  validation {
+    condition = alltrue([
+      for vol in var.ebs_volumes : contains(["gp2", "gp3", "io1", "io2", "sc1", "st1"], vol.volume_type)
+    ])
+    error_message = "All EBS volume types must be one of: gp2, gp3, io1, io2, sc1, st1."
+  }
+}
