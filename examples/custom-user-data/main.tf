@@ -59,6 +59,10 @@ module "custom_server" {
 
   enable_ssm = true
 
+  # Security group configuration
+  create_security_group = true
+  allowed_cidr_blocks   = ["10.2.0.0/16"] # Allow access from VPC CIDR
+
   user_data = <<-EOF
 #!/bin/bash
 exec > >(tee /var/log/user-data.log) 2>&1
@@ -107,4 +111,14 @@ output "public_ip" {
 output "ssm_instance_url" {
   description = "SSM Console Session URL for the instance"
   value       = module.custom_server.ssm_instance_url
+}
+
+output "security_group_id" {
+  description = "Security Group ID created by the module"
+  value       = module.custom_server.security_group_id
+}
+
+output "effective_security_group_ids" {
+  description = "List of security group IDs attached to the instance"
+  value       = module.custom_server.effective_security_group_ids
 }

@@ -14,8 +14,13 @@ output "private_ip" {
 }
 
 output "security_group_id" {
-  description = "Security Group ID"
-  value       = aws_security_group.ec2_server.id
+  description = "Security Group ID (if created)"
+  value       = var.create_security_group ? aws_security_group.ec2_server[0].id : null
+}
+
+output "effective_security_group_ids" {
+  description = "List of security group IDs attached to the instance"
+  value       = local.effective_security_group_ids
 }
 
 output "ssm_instance_url" {

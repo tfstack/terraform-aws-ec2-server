@@ -1,6 +1,10 @@
 # Provider configuration for tests
 provider "aws" {
   region = "ap-southeast-2"
+  # Skip credentials validation for plan-only tests
+  skip_credentials_validation = true
+  skip_metadata_api_check     = true
+  skip_requesting_account_id  = true
 }
 
 # Test Basic EC2 Server Configuration
@@ -56,6 +60,21 @@ run "basic_server" {
   assert {
     condition     = var.http_port == 80
     error_message = "HTTP port should default to 80"
+  }
+
+  assert {
+    condition     = var.create_security_group == false
+    error_message = "create_security_group should default to false"
+  }
+
+  assert {
+    condition     = length(var.vpc_security_group_ids) == 0
+    error_message = "vpc_security_group_ids should default to empty list"
+  }
+
+  assert {
+    condition     = length(var.allowed_cidr_blocks) == 1 && var.allowed_cidr_blocks[0] == "0.0.0.0/0"
+    error_message = "allowed_cidr_blocks should default to 0.0.0.0/0"
   }
 }
 
@@ -123,6 +142,21 @@ run "webserver_server" {
   assert {
     condition     = var.http_port == 80
     error_message = "HTTP port should default to 80"
+  }
+
+  assert {
+    condition     = var.create_security_group == false
+    error_message = "create_security_group should default to false for webserver"
+  }
+
+  assert {
+    condition     = length(var.vpc_security_group_ids) == 0
+    error_message = "vpc_security_group_ids should default to empty list"
+  }
+
+  assert {
+    condition     = length(var.allowed_cidr_blocks) == 1 && var.allowed_cidr_blocks[0] == "0.0.0.0/0"
+    error_message = "allowed_cidr_blocks should default to 0.0.0.0/0"
   }
 }
 
@@ -623,5 +657,237 @@ run "test_ebs_defaults" {
   assert {
     condition     = length(var.ebs_volumes) == 0
     error_message = "Default EBS volumes list should be empty"
+  }
+}
+
+# Security Group Tests
+
+# Test Security Group Creation with Custom CIDR Blocks
+run "security_group_creation" {
+  command = plan
+
+  variables {
+    vpc_id                = "vpc-12345678"
+    subnet_id             = "subnet-87654321"
+    instance_type         = "t3.micro"
+    create_security_group = true
+    allowed_cidr_blocks   = ["10.0.0.0/8", "172.16.0.0/12"]
+    instance_tags = {
+      Environment = "test"
+      Project     = "ec2-sg-test"
+      Type        = "security-group"
+    }
+  }
+
+  assert {
+    condition     = var.create_security_group == true
+    error_message = "create_security_group should be true"
+  }
+
+  assert {
+    condition     = length(var.allowed_cidr_blocks) == 2
+    error_message = "Should have 2 allowed CIDR blocks"
+  }
+
+  assert {
+    condition     = var.allowed_cidr_blocks[0] == "10.0.0.0/8"
+    error_message = "First CIDR block should be 10.0.0.0/8"
+  }
+
+  assert {
+    condition     = var.allowed_cidr_blocks[1] == "172.16.0.0/12"
+    error_message = "Second CIDR block should be 172.16.0.0/12"
+  }
+
+  assert {
+    condition     = length(var.vpc_security_group_ids) == 0
+    error_message = "vpc_security_group_ids should be empty when creating new security group"
+  }
+}
+
+# Test Using Existing Security Group IDs
+run "existing_security_groups" {
+  command = plan
+
+  variables {
+    vpc_id                 = "vpc-12345678"
+    subnet_id              = "subnet-87654321"
+    instance_type          = "t3.micro"
+    create_security_group  = false
+    vpc_security_group_ids = ["sg-12345678", "sg-87654321"]
+    instance_tags = {
+      Environment = "test"
+      Project     = "ec2-existing-sg-test"
+      Type        = "existing-sg"
+    }
+  }
+
+  assert {
+    condition     = var.create_security_group == false
+    error_message = "create_security_group should be false"
+  }
+
+  assert {
+    condition     = length(var.vpc_security_group_ids) == 2
+    error_message = "Should have 2 existing security group IDs"
+  }
+
+  assert {
+    condition     = var.vpc_security_group_ids[0] == "sg-12345678"
+    error_message = "First security group ID should be sg-12345678"
+  }
+
+  assert {
+    condition     = var.vpc_security_group_ids[1] == "sg-87654321"
+    error_message = "Second security group ID should be sg-87654321"
+  }
+
+  assert {
+    condition     = length(var.allowed_cidr_blocks) == 1 && var.allowed_cidr_blocks[0] == "0.0.0.0/0"
+    error_message = "allowed_cidr_blocks should use default value"
+  }
+}
+
+# Test Combining Created and Existing Security Groups
+run "combined_security_groups" {
+  command = plan
+
+  variables {
+    vpc_id                 = "vpc-12345678"
+    subnet_id              = "subnet-87654321"
+    instance_type          = "t3.micro"
+    create_security_group  = true
+    allowed_cidr_blocks    = ["10.0.0.0/8"]
+    vpc_security_group_ids = ["sg-12345678"]
+    instance_tags = {
+      Environment = "test"
+      Project     = "ec2-combined-sg-test"
+      Type        = "combined-sg"
+    }
+  }
+
+  assert {
+    condition     = var.create_security_group == true
+    error_message = "create_security_group should be true"
+  }
+
+  assert {
+    condition     = length(var.vpc_security_group_ids) == 1
+    error_message = "Should have 1 existing security group ID"
+  }
+
+  assert {
+    condition     = var.vpc_security_group_ids[0] == "sg-12345678"
+    error_message = "Existing security group ID should be sg-12345678"
+  }
+
+  assert {
+    condition     = var.allowed_cidr_blocks[0] == "10.0.0.0/8"
+    error_message = "Allowed CIDR block should be 10.0.0.0/8"
+  }
+}
+
+# Test Default Security Group Configuration
+run "default_security_group_config" {
+  command = plan
+
+  variables {
+    vpc_id    = "vpc-12345678"
+    subnet_id = "subnet-87654321"
+  }
+
+  assert {
+    condition     = var.create_security_group == false
+    error_message = "create_security_group should default to false"
+  }
+
+  assert {
+    condition     = length(var.vpc_security_group_ids) == 0
+    error_message = "vpc_security_group_ids should default to empty list"
+  }
+
+  assert {
+    condition     = length(var.allowed_cidr_blocks) == 1 && var.allowed_cidr_blocks[0] == "0.0.0.0/0"
+    error_message = "allowed_cidr_blocks should default to 0.0.0.0/0"
+  }
+}
+
+# Test Security Group with SSM Enabled
+run "security_group_with_ssm" {
+  command = plan
+
+  variables {
+    vpc_id                = "vpc-12345678"
+    subnet_id             = "subnet-87654321"
+    instance_type         = "t3.micro"
+    create_security_group = true
+    allowed_cidr_blocks   = ["10.0.0.0/8"]
+    enable_ssm            = true
+    instance_tags = {
+      Environment = "test"
+      Project     = "ec2-sg-ssm-test"
+      Type        = "sg-ssm"
+    }
+  }
+
+  assert {
+    condition     = var.create_security_group == true
+    error_message = "create_security_group should be true"
+  }
+
+  assert {
+    condition     = var.enable_ssm == true
+    error_message = "SSM should be enabled"
+  }
+
+  assert {
+    condition     = var.allowed_cidr_blocks[0] == "10.0.0.0/8"
+    error_message = "Allowed CIDR block should be 10.0.0.0/8"
+  }
+}
+
+# Test Security Group with Webserver Role
+run "security_group_with_webserver" {
+  command = plan
+
+  variables {
+    vpc_id                = "vpc-12345678"
+    subnet_id             = "subnet-87654321"
+    instance_type         = "t3.micro"
+    create_security_group = true
+    allowed_cidr_blocks   = ["0.0.0.0/0"]
+    role                  = "webserver"
+    webserver_type        = "nginx"
+    http_port             = 8080
+    instance_tags = {
+      Environment = "test"
+      Project     = "ec2-sg-webserver-test"
+      Type        = "sg-webserver"
+    }
+  }
+
+  assert {
+    condition     = var.create_security_group == true
+    error_message = "create_security_group should be true"
+  }
+
+  assert {
+    condition     = var.role == "webserver"
+    error_message = "Role should be webserver"
+  }
+
+  assert {
+    condition     = var.webserver_type == "nginx"
+    error_message = "Webserver type should be nginx"
+  }
+
+  assert {
+    condition     = var.http_port == 8080
+    error_message = "HTTP port should be 8080"
+  }
+
+  assert {
+    condition     = length(var.allowed_cidr_blocks) == 1 && var.allowed_cidr_blocks[0] == "0.0.0.0/0"
+    error_message = "Allowed CIDR blocks should allow all traffic"
   }
 }
