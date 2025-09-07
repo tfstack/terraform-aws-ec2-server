@@ -114,6 +114,24 @@ variable "instance_tags" {
   default     = {}
 }
 
+variable "create_security_group" {
+  description = "Create a dedicated security group allowing SSH/ICMP from allowed CIDRs if no security group IDs are supplied. If true, vpc_security_group_ids can be empty."
+  type        = bool
+  default     = false
+}
+
+variable "vpc_security_group_ids" {
+  description = "List of security group IDs to attach to the instance."
+  type        = list(string)
+  default     = []
+}
+
+variable "allowed_cidr_blocks" {
+  description = "List of CIDR blocks allowed to access the instance via SSH and ICMP"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
 # EBS Volume Configuration
 variable "ebs_volume_size" {
   description = "Size of the EBS volume in GB (for single volume configuration)"

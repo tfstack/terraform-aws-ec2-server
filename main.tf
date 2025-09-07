@@ -16,6 +16,8 @@ data "aws_ami" "amazon_linux_2" {
 
 # Security Group
 resource "aws_security_group" "ec2_server" {
+  count = var.create_security_group ? 1 : 0
+
   name_prefix = "${var.name}-sg-"
   vpc_id      = var.vpc_id
 
@@ -41,6 +43,15 @@ resource "aws_security_group" "ec2_server" {
   tags = merge(var.instance_tags, {
     Name = "${var.name}-sg"
   })
+}
+
+# Derived locals for effective security group IDs
+locals {
+  effective_security_group_ids = (
+    var.create_security_group ? (
+      length(var.vpc_security_group_ids) > 0 ? concat(var.vpc_security_group_ids, [aws_security_group.ec2_server[0].id]) : [aws_security_group.ec2_server[0].id]
+    ) : var.vpc_security_group_ids
+  )
 }
 
 # IAM Role for EC2 instance
@@ -94,7 +105,7 @@ resource "aws_instance" "server" {
   ami                    = data.aws_ami.amazon_linux_2.id
   instance_type          = var.instance_type
   subnet_id              = var.subnet_id
-  vpc_security_group_ids = [aws_security_group.ec2_server.id]
+  vpc_security_group_ids = local.effective_security_group_ids
   iam_instance_profile   = var.enable_ssm || var.enable_cw_logs ? aws_iam_instance_profile.ec2_server[0].name : null
 
   # Use user_data for plain text, user_data_base64 for encoded
